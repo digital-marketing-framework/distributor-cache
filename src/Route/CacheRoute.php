@@ -2,7 +2,9 @@
 
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
-use DigitalMarketingFramework\Collector\Core\Registry\RegistryInterface as CollectorRegistryInterface;
+use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\BooleanSchema;
+use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\ContainerSchema;
+use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\SchemaInterface;
 use DigitalMarketingFramework\Core\Context\ContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
@@ -11,14 +13,21 @@ use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatch
 use DigitalMarketingFramework\Distributor\Core\Model\DataSet\SubmissionDataSetInterface;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
 use DigitalMarketingFramework\Distributor\Core\Route\Route;
-use DigitalMarketingFramework\Distributor\Core\Service\Relay;
+use DigitalMarketingFramework\Distributor\Core\Service\RelayInterface;
 
 abstract class CacheRoute extends Route
 {
     protected const DISPATCHER_KEYWORD = 'cache';
 
-    protected const DEFAULT_ASYNC = false;
-    protected const DEFAULT_DISABLE_STORAGE = true;
+    protected const IGNORED_INTERNAL_ROUTE_KEYS = [
+        RelayInterface::KEY_ASYNC,
+        RelayInterface::KEY_DISABLE_STORAGE,
+    ];
+
+    protected const KEY_OVERRIDE = 'override';
+    protected const DEFAULT_OVERRIDE = false;
+    
+    protected const KEY_OVERRIDE_CONFIG = 'overrideConfig';
 
     protected IdentifierCollectorInterface $identifierCollector;
 
@@ -48,24 +57,17 @@ abstract class CacheRoute extends Route
         return $this->submission->getConfiguration()->getRoutePassConfiguration($keyword, $this->getPass());
     }
 
-    protected function getInternalDefaultConfiguration(): array
-    {
-        $keyword = $this->getInternalKeyword();
-        return $this->registry->getRouteDefaultConfigurations()[$keyword] ?? [];
-    }
-
     protected function getConfig(string $key, $default = null, ?array $configuration = null, ?array $defaultConfiguration = null): mixed
     {
-        $result = parent::getConfig($key, $default, $configuration, $defaultConfiguration);
-        if ($result === null && $configuration === null && $defaultConfiguration === null) {
-            $result = parent::getConfig(
-                $key,
-                $default,
-                $this->getInternalConfiguration(),
-                $this->getInternalDefaultConfiguration()
-            );
+        if (parent::getConfig(static::KEY_OVERRIDE)) {
+            return parent::getConfig($key, $default);
         }
-        return $result;
+        return parent::getConfig(
+            $key,
+            $default,
+            $this->getInternalConfiguration(),
+            $this->getInternalDefaultConfiguration()
+        );
     }
 
     protected function getInternalKeyword(): string
@@ -76,6 +78,8 @@ abstract class CacheRoute extends Route
         }
         throw new DigitalMarketingFrameworkException('Original route keyword unknown');
     }
+
+    abstract protected static function getInternalRouteClass(): string;
 
     public function addContext(ContextInterface $context): void
     {
@@ -104,13 +108,51 @@ abstract class CacheRoute extends Route
         return $cacheDispatcher;
     }
 
+    public function async(): ?bool
+    {
+        return false;
+    }
+
+    public function disableStorage(): ?bool
+    {
+        return true;
+    }
+
+    protected static function getInternalRouteSchema(): SchemaInterface
+    {
+        $internalRouteClass = static::getInternalRouteClass();
+        /** @var ContainerSchema $internalRouteSchema */
+        $internalRouteSchema = $internalRouteClass::getSchema();
+        foreach (static::IGNORED_INTERNAL_ROUTE_KEYS as $key) {
+            $internalRouteSchema->removeProperty($key);
+        }
+        return $internalRouteSchema;
+    }
+
+    protected static function getInternalDefaultConfiguration(): array
+    {
+        $internalRouteClass = static::getInternalRouteClass();
+        $internalRouteDefaultConfig = $internalRouteClass::getDefaultConfiguration();
+        foreach (static::IGNORED_INTERNAL_ROUTE_KEYS as $key) {
+            unset($internalRouteDefaultConfig[$key]);
+        }
+        return $internalRouteDefaultConfig;
+    }
+
     public static function getDefaultConfiguration(): array
     {
-        // NOTE: do not extend the parent default configuration because by default the original route configuration should be used
-        //       except for the async and storage options; cache routes should always be sync and without storage
         return [
-            Relay::KEY_ASYNC => static::DEFAULT_ASYNC,
-            Relay::KEY_DISABLE_STORAGE => static::DEFAULT_DISABLE_STORAGE,
+            static::KEY_OVERRIDE => static::DEFAULT_OVERRIDE,
+            static::KEY_OVERRIDE_CONFIG => static::getInternalDefaultConfiguration(),
         ];
+    }
+
+    public static function getSchema(): SchemaInterface
+    {
+        $schema = new ContainerSchema();
+        $schema->addProperty(static::KEY_OVERRIDE, new BooleanSchema(static::DEFAULT_OVERRIDE));
+        $internalRouteProperty = $schema->addProperty(static::KEY_OVERRIDE_CONFIG, static::getInternalRouteSchema());
+        $internalRouteProperty->getRenderingDefinition()->setVisibilityConditionByBoolean('./' . static::KEY_OVERRIDE);
+        return $schema;
     }
 }
