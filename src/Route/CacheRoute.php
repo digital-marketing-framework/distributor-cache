@@ -26,7 +26,7 @@ abstract class CacheRoute extends Route
 
     protected const KEY_OVERRIDE = 'override';
     protected const DEFAULT_OVERRIDE = false;
-    
+
     protected const KEY_OVERRIDE_CONFIG = 'overrideConfig';
 
     protected IdentifierCollectorInterface $identifierCollector;
@@ -53,8 +53,14 @@ abstract class CacheRoute extends Route
 
     protected function getInternalConfiguration(): array
     {
+        // TODO we use the first occurrence of the internal route, is this a good idea? how else to do it?
         $keyword = $this->getInternalKeyword();
-        return $this->submission->getConfiguration()->getRoutePassConfiguration($keyword, $this->getPass());
+        $routeDataList = $this->submission->getConfiguration()->getRoutePasses();
+        foreach ($routeDataList as $index => $routeData) {
+            if ($routeData['keyword'] === $keyword) {
+                return $this->submission->getConfiguration()->getRoutePassConfiguration($index);
+            }
+        }
     }
 
     protected function getConfig(string $key, $default = null, ?array $configuration = null, ?array $defaultConfiguration = null): mixed
@@ -129,22 +135,9 @@ abstract class CacheRoute extends Route
         return $internalRouteSchema;
     }
 
-    protected static function getInternalDefaultConfiguration(): array
+    protected function getInternalDefaultConfiguration(): array
     {
-        $internalRouteClass = static::getInternalRouteClass();
-        $internalRouteDefaultConfig = $internalRouteClass::getDefaultConfiguration();
-        foreach (static::IGNORED_INTERNAL_ROUTE_KEYS as $key) {
-            unset($internalRouteDefaultConfig[$key]);
-        }
-        return $internalRouteDefaultConfig;
-    }
-
-    public static function getDefaultConfiguration(): array
-    {
-        return [
-            static::KEY_OVERRIDE => static::DEFAULT_OVERRIDE,
-            static::KEY_OVERRIDE_CONFIG => static::getInternalDefaultConfiguration(),
-        ];
+        return $this->defaultConfiguration[static::KEY_OVERRIDE_CONFIG];
     }
 
     public static function getSchema(): SchemaInterface
