@@ -98,7 +98,7 @@ abstract class CacheRoute extends Route
             && $this->identifierCollector->getIdentifier($this->submission->getContext()) !== null;
     }
 
-    protected function getDispatcher(): ?DataDispatcherInterface
+    protected function getDispatcher(): DataDispatcherInterface
     {
         $identifier = $this->identifierCollector->getIdentifier($this->submission->getContext());
         if ($identifier === null) {
