@@ -146,8 +146,8 @@ abstract class CacheRoute extends Route
         $schema->addProperty(static::KEY_OVERRIDE, new BooleanSchema(static::DEFAULT_OVERRIDE));
         $internalRouteSchema = static::getInternalRouteSchema();
         $internalRouteSchema->getRenderingDefinition()->setNavigationItem(false);
-        $internalRouteProperty = $schema->addProperty(static::KEY_OVERRIDE_CONFIG, $internalRouteSchema);
-        $internalRouteProperty->getRenderingDefinition()->setVisibilityConditionByBoolean('./' . static::KEY_OVERRIDE);
+        $internalRouteSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_OVERRIDE)->addValue(true);
+        $schema->addProperty(static::KEY_OVERRIDE_CONFIG, $internalRouteSchema);
         return $schema;
     }
 }
