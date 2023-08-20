@@ -17,6 +17,8 @@ use DigitalMarketingFramework\Distributor\Core\Service\RelayInterface;
 
 abstract class CacheRoute extends Route
 {
+    public const WEIGHT = 100;
+
     protected const DISPATCHER_KEYWORD = 'cache';
 
     protected const IGNORED_INTERNAL_ROUTE_KEYS = [
