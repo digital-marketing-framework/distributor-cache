@@ -5,99 +5,106 @@ namespace DigitalMarketingFramework\Distributor\Cache\Route;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\BooleanSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\ContainerSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\SchemaInterface;
+use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\StringSchema;
 use DigitalMarketingFramework\Core\Context\ContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
+use DigitalMarketingFramework\Core\Model\Data\DataInterface;
 use DigitalMarketingFramework\Distributor\Core\Registry\RegistryInterface;
 use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcherInterface;
+use DigitalMarketingFramework\Distributor\Core\ConfigurationDocument\SchemaDocument\Schema\Custom\RouteReferenceSchema;
 use DigitalMarketingFramework\Distributor\Core\Model\DataSet\SubmissionDataSetInterface;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
 use DigitalMarketingFramework\Distributor\Core\Route\Route;
+use DigitalMarketingFramework\Distributor\Core\Route\RouteInterface;
 use DigitalMarketingFramework\Distributor\Core\Service\RelayInterface;
 
-abstract class CacheRoute extends Route
+class CacheRoute extends Route
 {
     public const WEIGHT = 100;
 
     protected const DISPATCHER_KEYWORD = 'cache';
 
-    protected const IGNORED_INTERNAL_ROUTE_KEYS = [
-        RelayInterface::KEY_ASYNC,
-        RelayInterface::KEY_DISABLE_STORAGE,
-    ];
+    protected const KEY_CACHE_TYPE = 'type';
+    protected const DEFAULT_CACHE_TYPE = 'route';
 
-    protected const KEY_OVERRIDE = 'override';
-    protected const DEFAULT_OVERRIDE = false;
+    protected const CACHE_TYPE_ROUTE = 'route';
+    protected const CACHE_TYPE_CUSTOM = 'custom';
 
-    protected const KEY_OVERRIDE_CONFIG = 'overrideConfig';
+    protected const KEY_CUSTOM_CONTAINER = 'custom';
+    protected const KEY_IDENTIFIER_COLLECTOR_ID = 'identifierCollectorId';
 
+    protected const KEY_ROUTE_ID = 'routeId';
+
+    protected RouteInterface $referencedRoute;
     protected IdentifierCollectorInterface $identifierCollector;
 
-    public function __construct(
-        string $keyword,
-        RegistryInterface $registry,
-        SubmissionDataSetInterface $submission,
-        int $pass,
-    ) {
-        parent::__construct($keyword, $registry, $submission, $pass);
-        $this->initIdentifierCollector();
-    }
-
-    protected function initIdentifierCollector(): void
+    protected function getReferencedRoute(): RouteInterface
     {
-        $keyword = $this->getInternalKeyword();
-        $collector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
-        if ($collector === null) {
-            throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
-        }
-        $this->identifierCollector = $collector;
-    }
-
-    protected function getInternalConfiguration(): array
-    {
-        // TODO we use the first occurrence of the internal route, is this a good idea? how else to do it?
-        $keyword = $this->getInternalKeyword();
-        $routeDataList = $this->submission->getConfiguration()->getRoutePasses();
-        foreach ($routeDataList as $index => $routeData) {
-            if ($routeData['keyword'] === $keyword) {
-                return $this->submission->getConfiguration()->getRoutePassConfiguration($index);
+        if (!isset($this->referencedRoute)) {
+            $routeId = $this->getConfig(static::KEY_ROUTE_ID);
+            $this->referencedRoute = $this->registry->getRoute($this->submission, $routeId);
+            if ($this->referencedRoute === null) {
+                throw new DigitalMarketingFrameworkException(sprintf('Route with ID %s not found', $routeId));
             }
         }
+        return $this->referencedRoute;
     }
 
-    protected function getConfig(string $key, $default = null, ?array $configuration = null, ?array $defaultConfiguration = null): mixed
+    protected function getIdentifierCollector(): IdentifierCollectorInterface
     {
-        if (parent::getConfig(static::KEY_OVERRIDE)) {
-            return parent::getConfig($key, $default);
+        if (!isset($this->identifierCollector)) {
+            if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
+                $keyword = $this->getReferencedRoute()->getKeyword();
+            } else {
+                $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_ID);
+            }
+            $this->identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
+            if ($this->identifierCollector === null) {
+                throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
+            }
         }
-        return parent::getConfig(
-            $key,
-            $default,
-            $this->getInternalConfiguration(),
-            $this->getInternalDefaultConfiguration()
-        );
+        return $this->identifierCollector;
     }
 
-    protected function getInternalKeyword(): string
+    public function enabled(): bool
     {
-        $keyword = $this->getKeyword();
-        if (preg_match('/^(.+)Cache$/', $keyword, $matches)) {
-            return $matches[1];
+        if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
+            return $this->getReferencedRoute()->enabled();
         }
-        throw new DigitalMarketingFrameworkException('Original route keyword unknown');
+        return parent::enabled();
     }
 
-    abstract protected static function getInternalRouteClass(): string;
+    public function processGate(): bool
+    {
+        if ($this->getIdentifierCollector()->getIdentifier($this->submission->getContext()) === null) {
+            return false;
+        }
+        if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
+            return $this->getReferencedRoute()->processGate();
+        }
+        return parent::processGate();
+    }
+
+    public function buildData(): DataInterface
+    {
+        if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
+            return $this->getReferencedRoute()->buildData();
+        }
+        return parent::buildData();
+    }
+
+    public function getEnabledDataProviders(): array
+    {
+        if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
+            return $this->getReferencedRoute()->getEnabledDataProviders();
+        }
+        return parent::getEnabledDataProviders();
+    }
 
     public function addContext(ContextInterface $context): void
     {
-        $this->identifierCollector->addContext($context, $this->submission->getContext());
-    }
-
-    protected function processGate(): bool
-    {
-        return parent::processGate()
-            && $this->identifierCollector->getIdentifier($this->submission->getContext()) !== null;
+        $this->getIdentifierCollector()->addContext($context, $this->submission->getContext());
     }
 
     protected function getDispatcher(): DataDispatcherInterface
@@ -126,30 +133,36 @@ abstract class CacheRoute extends Route
         return true;
     }
 
-    protected static function getInternalRouteSchema(): SchemaInterface
-    {
-        $internalRouteClass = static::getInternalRouteClass();
-        /** @var ContainerSchema $internalRouteSchema */
-        $internalRouteSchema = $internalRouteClass::getSchema();
-        foreach (static::IGNORED_INTERNAL_ROUTE_KEYS as $key) {
-            $internalRouteSchema->removeProperty($key);
-        }
-        return $internalRouteSchema;
-    }
-
-    protected function getInternalDefaultConfiguration(): array
-    {
-        return $this->defaultConfiguration[static::KEY_OVERRIDE_CONFIG];
-    }
-
     public static function getSchema(): SchemaInterface
     {
         $schema = new ContainerSchema();
-        $schema->addProperty(static::KEY_OVERRIDE, new BooleanSchema(static::DEFAULT_OVERRIDE));
-        $internalRouteSchema = static::getInternalRouteSchema();
-        $internalRouteSchema->getRenderingDefinition()->setNavigationItem(false);
-        $internalRouteSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_OVERRIDE)->addValue(true);
-        $schema->addProperty(static::KEY_OVERRIDE_CONFIG, $internalRouteSchema);
+
+        $typeSchema = new StringSchema(static::DEFAULT_CACHE_TYPE);
+        $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_ROUTE, 'Inherit from Route');
+        $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_CUSTOM, 'Custom');
+        $typeSchema->getRenderingDefinition()->setFormat('select');
+        $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
+
+        $routeIdSchema = new RouteReferenceSchema();
+        $routeIdSchema->getRenderingDefinition()->setLabel('Route');
+        $routeIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_ROUTE);
+        $schema->addProperty(static::KEY_ROUTE_ID, $routeIdSchema);
+
+        /** @var ContainerSchema $customSchema */
+        $customSchema = parent::getSchema();
+        $customSchema->removeProperty(RelayInterface::KEY_ASYNC);
+        $customSchema->removeProperty(RelayInterface::KEY_DISABLE_STORAGE);
+        $customSchema->getRenderingDefinition()->setNavigationItem(false);
+        $customSchema->getRenderingDefinition()->setSkipHeader(true);
+        $customSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
+        $identifierIdSchema = new StringSchema();
+        $identifierIdSchema->getRenderingDefinition()->setLabel('IdentifierCollector');
+        $identifierIdSchema->getAllowedValues()->addValueSet('identifierCollector/all');
+        $identifierIdSchema->getRenderingDefinition()->setFormat('select');
+        $identifierIdProperty = $customSchema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
+        $identifierIdProperty->setWeight(90);
+        $schema->addProperty(static::KEY_CUSTOM_CONTAINER, $customSchema);
+
         return $schema;
     }
 }

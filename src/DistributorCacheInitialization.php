@@ -5,7 +5,9 @@ namespace DigitalMarketingFramework\Distributor\Cache;
 use DigitalMarketingFramework\Core\Initialization;
 use DigitalMarketingFramework\Core\Registry\RegistryDomain;
 use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcher;
+use DigitalMarketingFramework\Distributor\Cache\Route\CacheRoute;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
+use DigitalMarketingFramework\Distributor\Core\Route\RouteInterface;
 
 class DistributorCacheInitialization extends Initialization
 {
@@ -13,6 +15,9 @@ class DistributorCacheInitialization extends Initialization
         RegistryDomain::DISTRIBUTOR => [
             DataDispatcherInterface::class => [
                 CacheDataDispatcher::class,
+            ],
+            RouteInterface::class => [
+                CacheRoute::class,
             ],
         ],
     ];

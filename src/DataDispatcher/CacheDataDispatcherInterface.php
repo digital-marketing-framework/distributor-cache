@@ -8,5 +8,4 @@ use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInte
 interface CacheDataDispatcherInterface extends DataDispatcherInterface
 {
     public function setIdentifier(IdentifierInterface $identifier): void;
-    public function send(array $data): void;
 }
