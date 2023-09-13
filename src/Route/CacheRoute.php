@@ -2,6 +2,7 @@
 
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
+use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\BooleanSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\ContainerSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\SchemaInterface;
@@ -140,7 +141,7 @@ class CacheRoute extends Route
         $typeSchema = new StringSchema(static::DEFAULT_CACHE_TYPE);
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_ROUTE, 'Inherit from Route');
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_CUSTOM, 'Custom');
-        $typeSchema->getRenderingDefinition()->setFormat('select');
+        $typeSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
 
         $routeIdSchema = new RouteReferenceSchema();
@@ -158,7 +159,7 @@ class CacheRoute extends Route
         $identifierIdSchema = new StringSchema();
         $identifierIdSchema->getRenderingDefinition()->setLabel('IdentifierCollector');
         $identifierIdSchema->getAllowedValues()->addValueSet('identifierCollector/all');
-        $identifierIdSchema->getRenderingDefinition()->setFormat('select');
+        $identifierIdSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $identifierIdProperty = $customSchema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
         $identifierIdProperty->setWeight(90);
         $schema->addProperty(static::KEY_CUSTOM_CONTAINER, $customSchema);
