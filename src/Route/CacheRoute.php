@@ -3,7 +3,6 @@
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
-use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\BooleanSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\ContainerSchema;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\SchemaInterface;
 use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\StringSchema;
@@ -11,10 +10,9 @@ use DigitalMarketingFramework\Core\Context\ContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
 use DigitalMarketingFramework\Core\Model\Data\DataInterface;
-use DigitalMarketingFramework\Distributor\Core\Registry\RegistryInterface;
+use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
 use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcherInterface;
 use DigitalMarketingFramework\Distributor\Core\ConfigurationDocument\SchemaDocument\Schema\Custom\RouteReferenceSchema;
-use DigitalMarketingFramework\Distributor\Core\Model\DataSet\SubmissionDataSetInterface;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
 use DigitalMarketingFramework\Distributor\Core\Route\Route;
 use DigitalMarketingFramework\Distributor\Core\Route\RouteInterface;
@@ -27,17 +25,21 @@ class CacheRoute extends Route
     protected const DISPATCHER_KEYWORD = 'cache';
 
     protected const KEY_CACHE_TYPE = 'type';
+
     protected const DEFAULT_CACHE_TYPE = 'route';
 
     protected const CACHE_TYPE_ROUTE = 'route';
+
     protected const CACHE_TYPE_CUSTOM = 'custom';
 
     protected const KEY_CUSTOM_CONTAINER = 'custom';
+
     protected const KEY_IDENTIFIER_COLLECTOR_ID = 'identifierCollectorId';
 
     protected const KEY_ROUTE_ID = 'routeId';
 
     protected RouteInterface $referencedRoute;
+
     protected IdentifierCollectorInterface $identifierCollector;
 
     protected function getReferencedRoute(): RouteInterface
@@ -45,10 +47,11 @@ class CacheRoute extends Route
         if (!isset($this->referencedRoute)) {
             $routeId = $this->getConfig(static::KEY_ROUTE_ID);
             $this->referencedRoute = $this->registry->getRoute($this->submission, $routeId);
-            if ($this->referencedRoute === null) {
+            if (!$this->referencedRoute instanceof RouteInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Route with ID %s not found', $routeId));
             }
         }
+
         return $this->referencedRoute;
     }
 
@@ -60,11 +63,13 @@ class CacheRoute extends Route
             } else {
                 $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_ID);
             }
+
             $this->identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
-            if ($this->identifierCollector === null) {
+            if (!$this->identifierCollector instanceof IdentifierCollectorInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
             }
         }
+
         return $this->identifierCollector;
     }
 
@@ -73,17 +78,20 @@ class CacheRoute extends Route
         if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
             return $this->getReferencedRoute()->enabled();
         }
+
         return parent::enabled();
     }
 
     public function processGate(): bool
     {
-        if ($this->getIdentifierCollector()->getIdentifier($this->submission->getContext()) === null) {
+        if (!$this->getIdentifierCollector()->getIdentifier($this->submission->getContext()) instanceof IdentifierInterface) {
             return false;
         }
+
         if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
             return $this->getReferencedRoute()->processGate();
         }
+
         return parent::processGate();
     }
 
@@ -92,6 +100,7 @@ class CacheRoute extends Route
         if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
             return $this->getReferencedRoute()->buildData();
         }
+
         return parent::buildData();
     }
 
@@ -100,6 +109,7 @@ class CacheRoute extends Route
         if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
             return $this->getReferencedRoute()->getEnabledDataProviders();
         }
+
         return parent::getEnabledDataProviders();
     }
 
@@ -111,7 +121,7 @@ class CacheRoute extends Route
     protected function getDispatcher(): DataDispatcherInterface
     {
         $identifier = $this->identifierCollector->getIdentifier($this->submission->getContext());
-        if ($identifier === null) {
+        if (!$identifier instanceof IdentifierInterface) {
             throw new DigitalMarketingFrameworkException('No identifier found for cache dispatcher');
         }
 
@@ -121,6 +131,7 @@ class CacheRoute extends Route
         }
 
         $cacheDispatcher->setIdentifier($identifier);
+
         return $cacheDispatcher;
     }
 
@@ -162,6 +173,7 @@ class CacheRoute extends Route
         $identifierIdSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $identifierIdProperty = $customSchema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
         $identifierIdProperty->setWeight(90);
+
         $schema->addProperty(static::KEY_CUSTOM_CONTAINER, $customSchema);
 
         return $schema;
