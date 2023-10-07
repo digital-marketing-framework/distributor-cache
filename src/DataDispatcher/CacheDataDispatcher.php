@@ -11,7 +11,7 @@ use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
 use DigitalMarketingFramework\Core\Utility\CacheUtility;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcher;
 
-class CacheDataDispatcher extends DataDispatcher implements CacheDataDispatcherInterface, DataCacheAwareInterface
+class CacheDataDispatcher extends DataDispatcher implements DataCacheAwareInterface
 {
     use DataCacheAwareTrait;
 

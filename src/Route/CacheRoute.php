@@ -11,7 +11,7 @@ use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
 use DigitalMarketingFramework\Core\Model\Data\DataInterface;
 use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
-use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcherInterface;
+use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcher;
 use DigitalMarketingFramework\Distributor\Core\ConfigurationDocument\SchemaDocument\Schema\Custom\RouteReferenceSchema;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
 use DigitalMarketingFramework\Distributor\Core\Route\Route;
@@ -126,8 +126,8 @@ class CacheRoute extends Route
         }
 
         $cacheDispatcher = $this->registry->getDataDispatcher(static::DISPATCHER_KEYWORD);
-        if (!$cacheDispatcher instanceof CacheDataDispatcherInterface) {
-            throw new DigitalMarketingFrameworkException(sprintf('Dispatcher does not implement %s', CacheDataDispatcherInterface::class));
+        if (!$cacheDispatcher instanceof CacheDataDispatcher) {
+            throw new DigitalMarketingFrameworkException(sprintf('Dispatcher does not implement %s', CacheDataDispatcher::class));
         }
 
         $cacheDispatcher->setIdentifier($identifier);
