@@ -22,21 +22,21 @@ class CacheRoute extends Route
 {
     public const WEIGHT = 100;
 
-    protected const DISPATCHER_KEYWORD = 'cache';
+    public const DISPATCHER_KEYWORD = 'cache';
 
-    protected const KEY_CACHE_TYPE = 'type';
+    public const KEY_CACHE_TYPE = 'type';
 
-    protected const DEFAULT_CACHE_TYPE = 'route';
+    public const DEFAULT_CACHE_TYPE = 'route';
 
-    protected const CACHE_TYPE_ROUTE = 'route';
+    public const CACHE_TYPE_ROUTE = 'route';
 
-    protected const CACHE_TYPE_CUSTOM = 'custom';
+    public const CACHE_TYPE_CUSTOM = 'custom';
 
-    protected const KEY_CUSTOM_CONTAINER = 'custom';
+    public const KEY_CUSTOM_CONTAINER = 'custom';
 
-    protected const KEY_IDENTIFIER_COLLECTOR_ID = 'identifierCollectorId';
+    public const KEY_IDENTIFIER_COLLECTOR_ID = 'identifierCollectorId';
 
-    protected const KEY_ROUTE_ID = 'routeId';
+    public const KEY_ROUTE_ID = 'routeId';
 
     protected RouteInterface $referencedRoute;
 
@@ -147,34 +147,34 @@ class CacheRoute extends Route
 
     public static function getSchema(): SchemaInterface
     {
-        $schema = new ContainerSchema();
+        /** @var ContainerSchema $schema */
+        $schema = parent::getSchema();
+        $schema->removeProperty(RelayInterface::KEY_ASYNC);
+        $schema->removeProperty(RelayInterface::KEY_DISABLE_STORAGE);
+        foreach ($schema->getProperties() as $property) {
+            $property->getSchema()->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
+        }
 
         $typeSchema = new StringSchema(static::DEFAULT_CACHE_TYPE);
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_ROUTE, 'Inherit from Route');
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_CUSTOM, 'Custom');
         $typeSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
-        $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
+        $typeProperty = $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
+        $typeProperty->setWeight(5);
 
         $routeIdSchema = new RouteReferenceSchema();
         $routeIdSchema->getRenderingDefinition()->setLabel('Route');
         $routeIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_ROUTE);
-        $schema->addProperty(static::KEY_ROUTE_ID, $routeIdSchema);
+        $routeIdProperty = $schema->addProperty(static::KEY_ROUTE_ID, $routeIdSchema);
+        $routeIdProperty->setWeight(6);
 
-        /** @var ContainerSchema $customSchema */
-        $customSchema = parent::getSchema();
-        $customSchema->removeProperty(RelayInterface::KEY_ASYNC);
-        $customSchema->removeProperty(RelayInterface::KEY_DISABLE_STORAGE);
-        $customSchema->getRenderingDefinition()->setNavigationItem(false);
-        $customSchema->getRenderingDefinition()->setSkipHeader(true);
-        $customSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
         $identifierIdSchema = new StringSchema();
         $identifierIdSchema->getRenderingDefinition()->setLabel('IdentifierCollector');
         $identifierIdSchema->getAllowedValues()->addValueSet('identifierCollector/all');
         $identifierIdSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
-        $identifierIdProperty = $customSchema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
-        $identifierIdProperty->setWeight(90);
-
-        $schema->addProperty(static::KEY_CUSTOM_CONTAINER, $customSchema);
+        $identifierIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
+        $identifierIdProperty = $schema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
+        $identifierIdProperty->setWeight(20);
 
         return $schema;
     }
