@@ -6,11 +6,12 @@ use DigitalMarketingFramework\Core\Cache\DataCacheAwareInterface;
 use DigitalMarketingFramework\Core\Cache\DataCacheAwareTrait;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\Model\Data\Data;
+use DigitalMarketingFramework\Core\Model\Data\DataInterface;
 use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
 use DigitalMarketingFramework\Core\Utility\CacheUtility;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcher;
 
-class CacheDataDispatcher extends DataDispatcher implements CacheDataDispatcherInterface, DataCacheAwareInterface
+class CacheDataDispatcher extends DataDispatcher implements DataCacheAwareInterface
 {
     use DataCacheAwareTrait;
 
@@ -26,13 +27,14 @@ class CacheDataDispatcher extends DataDispatcher implements CacheDataDispatcherI
         if (!isset($this->identifier)) {
             throw new DigitalMarketingFrameworkException('Cache identifier is not set for cache route!');
         }
+
         $newData = new Data($data);
 
         $oldData = $this->cache->fetch($this->identifier);
-        if ($oldData !== null) {
-            $newData = CacheUtility::mergeData([$oldData, $newData], override:true);
+        if ($oldData instanceof DataInterface) {
+            $newData = CacheUtility::mergeData([$oldData, $newData], override: true);
         }
 
-        $this->cache->store($this->identifier, $newData, followReferences:true);
+        $this->cache->store($this->identifier, $newData, followReferences: true);
     }
 }
