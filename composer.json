@@ -4,11 +4,12 @@
     "license": "GPL-2.0-or-later",
     "type": "library",
     "keywords": [
+        "marketing",
         "framework",
-        "form",
         "data",
-        "submission",
         "relay",
+        "distribution",
+        "distributor",
         "cache"
     ],
     "authors": [
