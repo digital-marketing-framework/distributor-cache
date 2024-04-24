@@ -45,8 +45,6 @@ class CacheOutboundRoute extends OutboundRoute
 
     public const CACHE_TYPE_CUSTOM = 'custom';
 
-    public const KEY_CUSTOM_CONTAINER = 'custom';
-
     public const KEY_IDENTIFIER_COLLECTOR_REFERENCE = 'identifierCollectorReference';
 
     public const KEY_ROUTE_REFERENCE = 'routeReference';
@@ -57,12 +55,17 @@ class CacheOutboundRoute extends OutboundRoute
 
     public static function getIntegrationName(): string
     {
-        return 'cache';
+        return 'system';
+    }
+
+    public static function getIntegrationWeight(): int
+    {
+        return static::INTEGRATION_WEIGHT_BOTTOM;
     }
 
     public static function getOutboundRouteListLabel(): ?string
     {
-        return 'Cache Routes';
+        return 'Outbound System Routes';
     }
 
     protected function getReferencedRoute(): OutboundRouteInterface
