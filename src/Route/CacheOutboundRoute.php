@@ -105,6 +105,10 @@ class CacheOutboundRoute extends OutboundRoute
 
     public function enabled(): bool
     {
+        if (!parent::enabled()) {
+            return false;
+        }
+
         if ($this->getCacheTimeout() <= 0) {
             return false;
         }
@@ -113,7 +117,7 @@ class CacheOutboundRoute extends OutboundRoute
             return $this->getReferencedRoute()->enabled();
         }
 
-        return parent::enabled();
+        return true;
     }
 
     public function processGate(): bool
@@ -202,34 +206,38 @@ class CacheOutboundRoute extends OutboundRoute
         $schema->removeProperty(DistributorConfigurationInterface::KEY_ASYNC);
         $schema->removeProperty(DistributorConfigurationInterface::KEY_ENABLE_STORAGE);
         foreach ($schema->getProperties() as $property) {
+            if ($property->getName() === static::KEY_ENABLED) {
+                continue;
+            }
             $property->getSchema()->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
         }
 
         $cacheLifetimeSchema = new InheritableIntegerSchema();
         $cacheLifetimeSchema->getRenderingDefinition()->setLabel('Cache lifetime (seconds)');
         $property = $schema->addProperty(static::KEY_CACHE_TIMEOUT_IN_SECONDS, $cacheLifetimeSchema);
-        $property->setWeight(1);
+        $property->setWeight(11);
 
         $typeSchema = new StringSchema(static::DEFAULT_CACHE_TYPE);
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_ROUTE, 'Inherit from Route');
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_CUSTOM, 'Custom');
         $typeSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $typeProperty = $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
-        $typeProperty->setWeight(5);
+        $typeProperty->setWeight(12);
 
         $routeReferenceSchema = new OutboundRouteReferenceSchema(integrationNestingLevel: 7);
-        // $routeReferenceSchema->getRenderingDefinition()->setLabel('Route');
         $routeReferenceSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_ROUTE);
-        $routeIdProperty = $schema->addProperty(static::KEY_ROUTE_REFERENCE, $routeReferenceSchema);
-        $routeIdProperty->setWeight(6);
+        $property = $schema->addProperty(static::KEY_ROUTE_REFERENCE, $routeReferenceSchema);
+        $property->setWeight(13);
 
         $identifierIdSchema = new StringSchema();
+        $identifierIdSchema->setRequired();
         $identifierIdSchema->getRenderingDefinition()->setLabel('IdentifierCollector');
+        $identifierIdSchema->getAllowedValues()->addValue('', 'Please select');
         $identifierIdSchema->getAllowedValues()->addValueSet('identifierCollector/all');
         $identifierIdSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $identifierIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
-        $identifierIdProperty = $schema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE, $identifierIdSchema);
-        $identifierIdProperty->setWeight(20);
+        $property = $schema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE, $identifierIdSchema);
+        $property->setWeight(20);
 
         return $schema;
     }
