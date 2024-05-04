@@ -8,6 +8,7 @@ use DigitalMarketingFramework\Collector\Core\Route\InboundRoute;
 use DigitalMarketingFramework\Collector\Core\Route\InboundRouteInterface;
 use DigitalMarketingFramework\Collector\Core\Service\Collector;
 use DigitalMarketingFramework\Collector\Core\Service\CollectorInterface;
+use DigitalMarketingFramework\Core\Integration\IntegrationInfo;
 use DigitalMarketingFramework\Core\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
 use DigitalMarketingFramework\Core\SchemaDocument\Schema\BooleanSchema;
 use DigitalMarketingFramework\Core\SchemaDocument\Schema\ContainerSchema;
@@ -53,19 +54,9 @@ class CacheOutboundRoute extends OutboundRoute
 
     protected IdentifierCollectorInterface $identifierCollector;
 
-    public static function getIntegrationName(): string
+    public static function getDefaultIntegrationInfo(): IntegrationInfo
     {
-        return 'system';
-    }
-
-    public static function getIntegrationWeight(): int
-    {
-        return static::INTEGRATION_WEIGHT_BOTTOM;
-    }
-
-    public static function getOutboundRouteListLabel(): ?string
-    {
-        return 'Outbound System Routes';
+        return new IntegrationInfo('system', weight: IntegrationInfo::WEIGHT_BOTTOM, outboundRouteListLabel: 'Outbound System Routes');
     }
 
     protected function getReferencedRoute(): OutboundRouteInterface
@@ -196,7 +187,7 @@ class CacheOutboundRoute extends OutboundRoute
 
     public function enableStorage(): ?bool
     {
-        return true;
+        return false;
     }
 
     public static function getSchema(): SchemaInterface
