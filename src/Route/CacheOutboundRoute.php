@@ -2,27 +2,32 @@
 
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
-use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
-use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\ContainerSchema;
-use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\SchemaInterface;
-use DigitalMarketingFramework\Core\ConfigurationDocument\SchemaDocument\Schema\StringSchema;
+use DigitalMarketingFramework\Collector\Core\Model\Configuration\CollectorConfiguration;
 use DigitalMarketingFramework\Core\Context\ContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
+use DigitalMarketingFramework\Core\Integration\IntegrationInfo;
 use DigitalMarketingFramework\Core\Model\Data\DataInterface;
 use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\ContainerSchema;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\Custom\InheritableIntegerSchema;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\SchemaInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\StringSchema;
 use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcher;
-use DigitalMarketingFramework\Distributor\Core\ConfigurationDocument\SchemaDocument\Schema\Custom\RouteReferenceSchema;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
-use DigitalMarketingFramework\Distributor\Core\Route\Route;
-use DigitalMarketingFramework\Distributor\Core\Route\RouteInterface;
-use DigitalMarketingFramework\Distributor\Core\Service\RelayInterface;
+use DigitalMarketingFramework\Distributor\Core\Model\Configuration\DistributorConfigurationInterface;
+use DigitalMarketingFramework\Distributor\Core\Route\OutboundRoute;
+use DigitalMarketingFramework\Distributor\Core\Route\OutboundRouteInterface;
+use DigitalMarketingFramework\Distributor\Core\SchemaDocument\Schema\Custom\OutboundRouteReferenceSchema;
 
-class CacheRoute extends Route
+class CacheOutboundRoute extends OutboundRoute
 {
     public const WEIGHT = 100;
 
     public const DISPATCHER_KEYWORD = 'cache';
+
+    public const KEY_CACHE_TIMEOUT_IN_SECONDS = 'cacheLifetime';
 
     public const KEY_CACHE_TYPE = 'type';
 
@@ -32,24 +37,31 @@ class CacheRoute extends Route
 
     public const CACHE_TYPE_CUSTOM = 'custom';
 
-    public const KEY_CUSTOM_CONTAINER = 'custom';
+    public const KEY_IDENTIFIER_COLLECTOR_REFERENCE = 'identifierCollectorReference';
 
-    public const KEY_IDENTIFIER_COLLECTOR_ID = 'identifierCollectorId';
+    public const KEY_ROUTE_REFERENCE = 'routeReference';
 
-    public const KEY_ROUTE_ID = 'routeId';
-
-    protected RouteInterface $referencedRoute;
+    protected OutboundRouteInterface $referencedRoute;
 
     protected IdentifierCollectorInterface $identifierCollector;
 
-    protected function getReferencedRoute(): RouteInterface
+    public static function getDefaultIntegrationInfo(): IntegrationInfo
+    {
+        return new IntegrationInfo('system', weight: IntegrationInfo::WEIGHT_BOTTOM, outboundRouteListLabel: 'Outbound System Routes');
+    }
+
+    protected function getReferencedRoute(): OutboundRouteInterface
     {
         if (!isset($this->referencedRoute)) {
-            $routeId = $this->getConfig(static::KEY_ROUTE_ID);
-            $this->referencedRoute = $this->registry->getRoute($this->submission, $routeId);
-            if (!$this->referencedRoute instanceof RouteInterface) {
-                throw new DigitalMarketingFrameworkException(sprintf('Route with ID %s not found', $routeId));
+            $routeReference = $this->getConfig(static::KEY_ROUTE_REFERENCE);
+            $integrationName = OutboundRouteReferenceSchema::getIntegrationName($routeReference);
+            $routeId = OutboundRouteReferenceSchema::getOutboundRouteId($routeReference);
+            $referencedRoute = $this->registry->getOutboundRoute($this->submission, $integrationName, $routeId);
+            if (!$referencedRoute instanceof OutboundRouteInterface) {
+                throw new DigitalMarketingFrameworkException(sprintf('Route with ID "%s" not found', $routeId));
             }
+
+            $this->referencedRoute = $referencedRoute;
         }
 
         return $this->referencedRoute;
@@ -61,13 +73,15 @@ class CacheRoute extends Route
             if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
                 $keyword = $this->getReferencedRoute()->getKeyword();
             } else {
-                $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_ID);
+                $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE);
             }
 
-            $this->identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
-            if (!$this->identifierCollector instanceof IdentifierCollectorInterface) {
+            $identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
+            if (!$identifierCollector instanceof IdentifierCollectorInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
             }
+
+            $this->identifierCollector = $identifierCollector;
         }
 
         return $this->identifierCollector;
@@ -75,11 +89,19 @@ class CacheRoute extends Route
 
     public function enabled(): bool
     {
+        if (!parent::enabled()) {
+            return false;
+        }
+
+        if ($this->getCacheTimeout() <= 0) {
+            return false;
+        }
+
         if ($this->getConfig(static::KEY_CACHE_TYPE) === static::CACHE_TYPE_ROUTE) {
             return $this->getReferencedRoute()->enabled();
         }
 
-        return parent::enabled();
+        return true;
     }
 
     public function processGate(): bool
@@ -118,6 +140,18 @@ class CacheRoute extends Route
         $this->getIdentifierCollector()->addContext($context, $this->submission->getContext());
     }
 
+    protected function getCacheTimeout(): int
+    {
+        $timeout = InheritableIntegerSchema::convert($this->getConfig(static::KEY_CACHE_TIMEOUT_IN_SECONDS));
+        if ($timeout !== null) {
+            return $timeout;
+        }
+
+        $configuration = CollectorConfiguration::convert($this->submission->getConfiguration());
+
+        return $configuration->getGeneralCacheTimeoutInSeconds();
+    }
+
     protected function getDispatcher(): DataDispatcherInterface
     {
         $identifier = $this->identifierCollector->getIdentifier($this->submission->getContext());
@@ -132,6 +166,13 @@ class CacheRoute extends Route
 
         $cacheDispatcher->setIdentifier($identifier);
 
+        $cacheTimeout = $this->getCacheTimeout();
+        if ($cacheTimeout <= 0) {
+            throw new DigitalMarketingFrameworkException('Cache lifetime must be greater than zero');
+        }
+
+        $cacheDispatcher->setCacheTimeoutInSeconds($cacheTimeout);
+
         return $cacheDispatcher;
     }
 
@@ -140,41 +181,51 @@ class CacheRoute extends Route
         return false;
     }
 
-    public function disableStorage(): ?bool
+    public function enableStorage(): ?bool
     {
-        return true;
+        return false;
     }
 
     public static function getSchema(): SchemaInterface
     {
         /** @var ContainerSchema $schema */
         $schema = parent::getSchema();
-        $schema->removeProperty(RelayInterface::KEY_ASYNC);
-        $schema->removeProperty(RelayInterface::KEY_DISABLE_STORAGE);
+        $schema->removeProperty(DistributorConfigurationInterface::KEY_ASYNC);
+        $schema->removeProperty(DistributorConfigurationInterface::KEY_ENABLE_STORAGE);
         foreach ($schema->getProperties() as $property) {
+            if ($property->getName() === static::KEY_ENABLED) {
+                continue;
+            }
+
             $property->getSchema()->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
         }
+
+        $cacheLifetimeSchema = new InheritableIntegerSchema();
+        $cacheLifetimeSchema->getRenderingDefinition()->setLabel('Cache lifetime (seconds)');
+        $property = $schema->addProperty(static::KEY_CACHE_TIMEOUT_IN_SECONDS, $cacheLifetimeSchema);
+        $property->setWeight(11);
 
         $typeSchema = new StringSchema(static::DEFAULT_CACHE_TYPE);
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_ROUTE, 'Inherit from Route');
         $typeSchema->getAllowedValues()->addValue(static::CACHE_TYPE_CUSTOM, 'Custom');
         $typeSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $typeProperty = $schema->addProperty(static::KEY_CACHE_TYPE, $typeSchema);
-        $typeProperty->setWeight(5);
+        $typeProperty->setWeight(12);
 
-        $routeIdSchema = new RouteReferenceSchema();
-        $routeIdSchema->getRenderingDefinition()->setLabel('Route');
-        $routeIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_ROUTE);
-        $routeIdProperty = $schema->addProperty(static::KEY_ROUTE_ID, $routeIdSchema);
-        $routeIdProperty->setWeight(6);
+        $routeReferenceSchema = new OutboundRouteReferenceSchema(integrationNestingLevel: 7);
+        $routeReferenceSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_ROUTE);
+        $property = $schema->addProperty(static::KEY_ROUTE_REFERENCE, $routeReferenceSchema);
+        $property->setWeight(13);
 
         $identifierIdSchema = new StringSchema();
+        $identifierIdSchema->setRequired();
         $identifierIdSchema->getRenderingDefinition()->setLabel('IdentifierCollector');
+        $identifierIdSchema->getAllowedValues()->addValue('', 'Please select');
         $identifierIdSchema->getAllowedValues()->addValueSet('identifierCollector/all');
         $identifierIdSchema->getRenderingDefinition()->setFormat(RenderingDefinitionInterface::FORMAT_SELECT);
         $identifierIdSchema->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
-        $identifierIdProperty = $schema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_ID, $identifierIdSchema);
-        $identifierIdProperty->setWeight(20);
+        $property = $schema->addProperty(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE, $identifierIdSchema);
+        $property->setWeight(20);
 
         return $schema;
     }

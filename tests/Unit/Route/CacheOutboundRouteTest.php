@@ -2,20 +2,23 @@
 
 namespace DigitalMarketingFramework\Distributor\Cache\Tests\Unit\Route;
 
+use DigitalMarketingFramework\Core\DataProcessor\DataProcessorContext;
 use DigitalMarketingFramework\Core\DataProcessor\DataProcessorInterface;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
 use DigitalMarketingFramework\Core\Model\Data\Data;
 use DigitalMarketingFramework\Core\Model\Data\Value\ValueInterface;
 use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
-use DigitalMarketingFramework\Distributor\Cache\Route\CacheRoute;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\Custom\IntegrationReferenceSchema;
+use DigitalMarketingFramework\Distributor\Cache\Route\CacheOutboundRoute;
 use DigitalMarketingFramework\Distributor\Core\Model\DataSet\SubmissionDataSet;
 use DigitalMarketingFramework\Distributor\Core\Model\DataSet\SubmissionDataSetInterface;
 use DigitalMarketingFramework\Distributor\Core\Registry\RegistryInterface;
-use DigitalMarketingFramework\Distributor\Core\Route\RouteInterface;
+use DigitalMarketingFramework\Distributor\Core\Route\OutboundRouteInterface;
+use DigitalMarketingFramework\Distributor\Core\SchemaDocument\Schema\Custom\OutboundRouteReferenceSchema;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
-class CacheRouteTest extends TestCase
+class CacheOutboundRouteTest extends TestCase
 {
     protected RegistryInterface&MockObject $registry;
 
@@ -25,13 +28,13 @@ class CacheRouteTest extends TestCase
 
     protected IdentifierInterface&MockObject $identifier;
 
-    protected RouteInterface&MockObject $referencedRoute;
+    protected OutboundRouteInterface&MockObject $referencedRoute;
 
-    protected CacheRoute $subject;
+    protected CacheOutboundRoute $subject;
 
     protected function setUp(): void
     {
-        $this->referencedRoute = $this->createMock(RouteInterface::class);
+        $this->referencedRoute = $this->createMock(OutboundRouteInterface::class);
         $this->dataProcessor = $this->createMock(DataProcessorInterface::class);
 
         $this->identifier = $this->createMock(IdentifierInterface::class);
@@ -51,24 +54,51 @@ class CacheRouteTest extends TestCase
         array $data = [],
         array $context = []
     ): SubmissionDataSetInterface {
+        if (!isset($config['cacheLifetime'])) {
+            $config['cacheLifetime'] = [
+                'inherited' => 'no',
+                'customValue' => 1000,
+            ];
+        }
+
+        if (!isset($config[CacheOutboundRoute::KEY_ROUTE_REFERENCE])) {
+            $config[CacheOutboundRoute::KEY_ROUTE_REFERENCE] = [
+                IntegrationReferenceSchema::KEY_INTEGRATION_REFERENCE => 'integration2',
+                OutboundRouteReferenceSchema::KEY_ROUTE_REFERENCE => 'routeId2',
+            ];
+        }
+
         $configuration = [
-            'distributor' => [
-                'routes' => [
-                    'routeId1' => [
-                        'uuid' => 'routeId1',
+            'integrations' => [
+                'system' => [
+                    'outboundRoutes' => [
+                        'routeId1' => [
+                            'uuid' => 'routeId1',
+                            'weight' => 10,
+                            'value' => [
+                                'type' => 'cache',
+                                'config' => [
+                                    'cache' => $config,
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+            'dataProcessing' => [
+                'dataMapperGroups' => [
+                    'dataMapperGroupId1' => [
+                        'uuid' => 'dataMapperGroupId1',
                         'weight' => 10,
                         'value' => [
-                            'type' => 'cache',
-                            'config' => [
-                                'cache' => $config,
-                            ],
+                            'dataConfigKey' => 'dataConfigValue',
                         ],
                     ],
                 ],
             ],
         ];
         $submission = new SubmissionDataSet($data, [$configuration], $context);
-        $this->registry->method('getRoute')->with($submission, 'routeId2')->willReturn($this->referencedRoute);
+        $this->registry->method('getOutboundRoute')->with($submission, 'integration2', 'routeId2')->willReturn($this->referencedRoute);
 
         return $submission;
     }
@@ -93,17 +123,37 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                'enabled' => !$enabled,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
+                'enabled' => true,
             ]
         );
         $this->referencedRoute->method('enabled')->willReturn($enabled);
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->enabled();
 
         $this->assertEquals($enabled, $result);
+    }
+
+    /**
+     * @dataProvider trueFalseDataProvider
+     *
+     * @test
+     */
+    public function disabledUsingReferencedRoute(bool $enabled): void
+    {
+        $submission = $this->getSubmission(
+            [
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
+                'enabled' => false,
+            ]
+        );
+        $this->referencedRoute->method('enabled')->willReturn($enabled);
+
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
+        $result = $this->subject->enabled();
+
+        $this->assertFalse($result);
     }
 
     /**
@@ -115,14 +165,13 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
                 'enabled' => $enabled,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
             ]
         );
         $this->referencedRoute->expects($this->never())->method('enabled');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->enabled();
 
         $this->assertEquals($enabled, $result);
@@ -133,13 +182,13 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
+                'enabled' => true,
             ]
         );
         $this->referencedRoute->expects($this->never())->method('async');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->async();
 
         $this->assertFalse($result);
@@ -150,50 +199,47 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
             ]
         );
         $this->referencedRoute->expects($this->never())->method('async');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->async();
 
         $this->assertFalse($result);
     }
 
     /** @test */
-    public function disableStorageUsingReferencedRoute(): void
+    public function enableStorageUsingReferencedRoute(): void
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
             ]
         );
-        $this->referencedRoute->expects($this->never())->method('disableStorage');
+        $this->referencedRoute->expects($this->never())->method('enableStorage');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
-        $result = $this->subject->disableStorage();
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
+        $result = $this->subject->enableStorage();
 
-        $this->assertTrue($result);
+        $this->assertFalse($result);
     }
 
     /** @test */
-    public function disableStorageUsingCustomConfig(): void
+    public function enableStorageUsingCustomConfig(): void
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
             ]
         );
-        $this->referencedRoute->expects($this->never())->method('disableStorage');
+        $this->referencedRoute->expects($this->never())->method('enableStorage');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
-        $result = $this->subject->disableStorage();
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
+        $result = $this->subject->enableStorage();
 
-        $this->assertTrue($result);
+        $this->assertFalse($result);
     }
 
     /** @test */
@@ -201,13 +247,12 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
             ]
         );
         $this->referencedRoute->method('getEnabledDataProviders')->willReturn(['dataProvider1']);
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->getEnabledDataProviders();
 
         $this->assertEquals(['dataProvider1'], $result);
@@ -218,8 +263,7 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
                 'enableDataProviders' => [
                     'type' => 'whitelist',
                     'config' => [
@@ -238,7 +282,7 @@ class CacheRouteTest extends TestCase
         );
         $this->referencedRoute->expects($this->never())->method('getEnabledDataProviders');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->getEnabledDataProviders();
 
         $this->assertEquals(['dataProvider2'], $result);
@@ -249,14 +293,13 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
-                'data' => ['dataConfigKey' => 'dataConfigValue'],
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
+                'data' => 'dataMapperGroupId1',
             ]
         );
         $this->referencedRoute->method('buildData')->willReturn(new Data(['field1' => 'value1']));
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->buildData();
 
         $this->assertEquals(['field1' => 'value1'], $result->toArray());
@@ -267,17 +310,19 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
-                'data' => ['dataConfigKey' => 'dataConfigValue'],
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
+                'data' => 'dataMapperGroupId1',
             ]
         );
         $this->referencedRoute->expects($this->never())->method('buildData');
-        $this->dataProcessor->method('processDataMapper')
-            ->with(['dataConfigKey' => 'dataConfigValue'], $submission->getData(), $submission->getConfiguration())
+
+        $dataProcessorContext = new DataProcessorContext($submission->getData(), $submission->getConfiguration());
+        $this->dataProcessor->method('createContext')->willReturn($dataProcessorContext);
+        $this->dataProcessor->method('processDataMapperGroup')
+            ->with(['dataConfigKey' => 'dataConfigValue'], $dataProcessorContext)
             ->willReturn(new Data(['field2' => 'value2']));
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $this->subject->setDataProcessor($this->dataProcessor);
 
         $result = $this->subject->buildData();
@@ -294,9 +339,8 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_ROUTE,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
-                CacheRoute::KEY_IDENTIFIER_COLLECTOR_ID => 'identifierCollectorId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_ROUTE,
+                CacheOutboundRoute::KEY_IDENTIFIER_COLLECTOR_REFERENCE => 'identifierCollectorId2',
                 'enabled' => !$gatePasses,
                 'gate' => ['gateConfigKey' => 'gateConfigValue'],
             ]
@@ -308,7 +352,7 @@ class CacheRouteTest extends TestCase
 
         $this->referencedRoute->method('processGate')->willReturn($gatePasses);
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $result = $this->subject->processGate();
 
         $this->assertEquals($gatePasses, $result);
@@ -323,9 +367,8 @@ class CacheRouteTest extends TestCase
     {
         $submission = $this->getSubmission(
             [
-                CacheRoute::KEY_CACHE_TYPE => CacheRoute::CACHE_TYPE_CUSTOM,
-                CacheRoute::KEY_ROUTE_ID => 'routeId2',
-                CacheRoute::KEY_IDENTIFIER_COLLECTOR_ID => 'identifierCollectorId2',
+                CacheOutboundRoute::KEY_CACHE_TYPE => CacheOutboundRoute::CACHE_TYPE_CUSTOM,
+                CacheOutboundRoute::KEY_IDENTIFIER_COLLECTOR_REFERENCE => 'identifierCollectorId2',
                 'enabled' => true,
                 'gate' => ['gateConfigKey' => 'gateConfigValue'],
             ]
@@ -334,11 +377,11 @@ class CacheRouteTest extends TestCase
         $this->registry->method('getIdentifierCollector')
             ->with('identifierCollectorId2', $submission->getConfiguration())
             ->willReturn($this->identifierCollector);
-        $this->dataProcessor->method('processEvaluation')->willReturn($gatePasses);
+        $this->dataProcessor->method('processCondition')->willReturn($gatePasses);
 
         $this->referencedRoute->expects($this->never())->method('processGate');
 
-        $this->subject = new CacheRoute('cache', $this->registry, $submission, 'routeId1');
+        $this->subject = new CacheOutboundRoute('cache', $this->registry, $submission, 'routeId1');
         $this->subject->setDataProcessor($this->dataProcessor);
 
         $result = $this->subject->processGate();

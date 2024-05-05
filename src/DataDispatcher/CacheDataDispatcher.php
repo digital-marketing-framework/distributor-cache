@@ -17,15 +17,26 @@ class CacheDataDispatcher extends DataDispatcher implements DataCacheAwareInterf
 
     protected IdentifierInterface $identifier;
 
+    protected int $cacheTimeoutInSeconds;
+
     public function setIdentifier(IdentifierInterface $identifier): void
     {
         $this->identifier = $identifier;
+    }
+
+    public function setCacheTimeoutInSeconds(int $cacheTimeoutInSeconds): void
+    {
+        $this->cacheTimeoutInSeconds = $cacheTimeoutInSeconds;
     }
 
     public function send(array $data): void
     {
         if (!isset($this->identifier)) {
             throw new DigitalMarketingFrameworkException('Cache identifier is not set for cache route!');
+        }
+
+        if (!isset($this->cacheTimeoutInSeconds)) {
+            throw new DigitalMarketingFrameworkException('Cache timeout is not set for cache route!');
         }
 
         $newData = new Data($data);
