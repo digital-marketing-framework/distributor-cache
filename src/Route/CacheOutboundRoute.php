@@ -3,32 +3,23 @@
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
 use DigitalMarketingFramework\Collector\Core\Model\Configuration\CollectorConfiguration;
-use DigitalMarketingFramework\Collector\Core\Model\Configuration\CollectorConfigurationInterface;
-use DigitalMarketingFramework\Collector\Core\Route\InboundRoute;
-use DigitalMarketingFramework\Collector\Core\Route\InboundRouteInterface;
-use DigitalMarketingFramework\Collector\Core\Service\Collector;
-use DigitalMarketingFramework\Collector\Core\Service\CollectorInterface;
-use DigitalMarketingFramework\Core\Integration\IntegrationInfo;
-use DigitalMarketingFramework\Core\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\BooleanSchema;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\ContainerSchema;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\Custom\InheritableIntegerSchema;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\IntegerSchema;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\SchemaInterface;
-use DigitalMarketingFramework\Core\SchemaDocument\Schema\StringSchema;
 use DigitalMarketingFramework\Core\Context\ContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
+use DigitalMarketingFramework\Core\Integration\IntegrationInfo;
 use DigitalMarketingFramework\Core\Model\Data\DataInterface;
 use DigitalMarketingFramework\Core\Model\Identifier\IdentifierInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\RenderingDefinition\RenderingDefinitionInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\ContainerSchema;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\Custom\InheritableIntegerSchema;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\SchemaInterface;
+use DigitalMarketingFramework\Core\SchemaDocument\Schema\StringSchema;
 use DigitalMarketingFramework\Distributor\Cache\DataDispatcher\CacheDataDispatcher;
-use DigitalMarketingFramework\Distributor\Core\Model\Configuration\DistributorConfigurationInterface;
-use DigitalMarketingFramework\Distributor\Core\SchemaDocument\Schema\Custom\OutboundRouteReferenceSchema;
 use DigitalMarketingFramework\Distributor\Core\DataDispatcher\DataDispatcherInterface;
+use DigitalMarketingFramework\Distributor\Core\Model\Configuration\DistributorConfigurationInterface;
 use DigitalMarketingFramework\Distributor\Core\Route\OutboundRoute;
 use DigitalMarketingFramework\Distributor\Core\Route\OutboundRouteInterface;
-use DigitalMarketingFramework\Distributor\Core\Service\DistributorInterface;
-use Symfony\Component\HttpKernel\DataCollector\DataCollectorInterface;
+use DigitalMarketingFramework\Distributor\Core\SchemaDocument\Schema\Custom\OutboundRouteReferenceSchema;
 
 class CacheOutboundRoute extends OutboundRoute
 {
@@ -69,6 +60,7 @@ class CacheOutboundRoute extends OutboundRoute
             if (!$referencedRoute instanceof OutboundRouteInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Route with ID "%s" not found', $routeId));
             }
+
             $this->referencedRoute = $referencedRoute;
         }
 
@@ -88,6 +80,7 @@ class CacheOutboundRoute extends OutboundRoute
             if (!$identifierCollector instanceof IdentifierCollectorInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
             }
+
             $this->identifierCollector = $identifierCollector;
         }
 
@@ -153,7 +146,9 @@ class CacheOutboundRoute extends OutboundRoute
         if ($timeout !== null) {
             return $timeout;
         }
+
         $configuration = CollectorConfiguration::convert($this->submission->getConfiguration());
+
         return $configuration->getGeneralCacheTimeoutInSeconds();
     }
 
@@ -175,6 +170,7 @@ class CacheOutboundRoute extends OutboundRoute
         if ($cacheTimeout <= 0) {
             throw new DigitalMarketingFrameworkException('Cache lifetime must be greater than zero');
         }
+
         $cacheDispatcher->setCacheTimeoutInSeconds($cacheTimeout);
 
         return $cacheDispatcher;
@@ -200,6 +196,7 @@ class CacheOutboundRoute extends OutboundRoute
             if ($property->getName() === static::KEY_ENABLED) {
                 continue;
             }
+
             $property->getSchema()->getRenderingDefinition()->addVisibilityConditionByValue('../' . static::KEY_CACHE_TYPE)->addValue(static::CACHE_TYPE_CUSTOM);
         }
 
