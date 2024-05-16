@@ -76,6 +76,10 @@ class CacheOutboundRoute extends OutboundRoute
                 $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE);
             }
 
+            /**
+             * TODO Does the identifier collector really need the submission configuration?
+             *      Or should it rather use the main configuration document, which is usually used for the collector?
+             */
             $identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
             if (!$identifierCollector instanceof IdentifierCollectorInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
