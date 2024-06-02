@@ -23,12 +23,13 @@
     "homepage": "https://www.mediatis.de",
     "require": {
         "php": "^8.1",
-        "digital-marketing-framework/collector-core": "^2.0",
-        "digital-marketing-framework/distributor-core": "^2.0"
+        "digital-marketing-framework/collector-core": "^2.1 || dev-feature/MFR-83-rest",
+        "digital-marketing-framework/distributor-core": "^2.1 || dev-feature/MFR-83-rest"
     },
     "require-dev": {
         "mediatis/coding-standards": "^1.0"
     },
+    "minimum-stability": "dev",
     "autoload": {
         "psr-4": {
             "DigitalMarketingFramework\\Distributor\\Cache\\": "src/"

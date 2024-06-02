@@ -3,7 +3,7 @@
 namespace DigitalMarketingFramework\Distributor\Cache\Route;
 
 use DigitalMarketingFramework\Collector\Core\Model\Configuration\CollectorConfiguration;
-use DigitalMarketingFramework\Core\Context\ContextInterface;
+use DigitalMarketingFramework\Core\Context\WriteableContextInterface;
 use DigitalMarketingFramework\Core\Exception\DigitalMarketingFrameworkException;
 use DigitalMarketingFramework\Core\IdentifierCollector\IdentifierCollectorInterface;
 use DigitalMarketingFramework\Core\Integration\IntegrationInfo;
@@ -76,10 +76,6 @@ class CacheOutboundRoute extends OutboundRoute
                 $keyword = $this->getConfig(static::KEY_IDENTIFIER_COLLECTOR_REFERENCE);
             }
 
-            /**
-             * TODO Does the identifier collector really need the submission configuration?
-             *      Or should it rather use the main configuration document, which is usually used for the collector?
-             */
             $identifierCollector = $this->registry->getIdentifierCollector($keyword, $this->submission->getConfiguration());
             if (!$identifierCollector instanceof IdentifierCollectorInterface) {
                 throw new DigitalMarketingFrameworkException(sprintf('Identifier collector not found for cache route: "%s"', $keyword));
@@ -110,7 +106,7 @@ class CacheOutboundRoute extends OutboundRoute
 
     public function processGate(): bool
     {
-        if (!$this->getIdentifierCollector()->getIdentifier($this->submission->getContext()) instanceof IdentifierInterface) {
+        if (!$this->getIdentifierCollector()->getIdentifier() instanceof IdentifierInterface) {
             return false;
         }
 
@@ -139,9 +135,9 @@ class CacheOutboundRoute extends OutboundRoute
         return parent::getEnabledDataProviders();
     }
 
-    public function addContext(ContextInterface $context): void
+    public function addContext(WriteableContextInterface $context): void
     {
-        $this->getIdentifierCollector()->addContext($context, $this->submission->getContext());
+        $this->getIdentifierCollector()->addContext($context);
     }
 
     protected function getCacheTimeout(): int
@@ -158,7 +154,7 @@ class CacheOutboundRoute extends OutboundRoute
 
     protected function getDispatcher(): DataDispatcherInterface
     {
-        $identifier = $this->identifierCollector->getIdentifier($this->submission->getContext());
+        $identifier = $this->identifierCollector->getIdentifier();
         if (!$identifier instanceof IdentifierInterface) {
             throw new DigitalMarketingFrameworkException('No identifier found for cache dispatcher');
         }
